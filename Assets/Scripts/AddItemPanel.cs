@@ -60,7 +60,7 @@ public class AddItemPanel : MonoBehaviour
         selectedItem = currentItems[index];
 
         // Auto-fill ID field
-        idInputField.text = selectedItem.itemId;
+        idInputField.text = selectedItem.itemId.ToString();
 
         // Optional default values
         quantityInputField.text = "1";

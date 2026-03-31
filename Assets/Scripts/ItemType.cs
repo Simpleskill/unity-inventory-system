@@ -7,4 +7,6 @@ public enum ItemType
     Equipment,
     Ammo,
     Skin,
+    Special,
+    Structure
 }

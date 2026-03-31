@@ -7,7 +7,6 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 {
     [Header("UI References")]
     [SerializeField] private Image itemIcon;
-    //[SerializeField] private TMP_Text itemNameText;
     [SerializeField] private TMP_Text quantityText;
     [SerializeField] private TMP_Text weightText;
     [SerializeField] private Slider durabilitySlider;
@@ -33,7 +32,6 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         quantityText.text = $"x{currentItem.quantity}";
         weightText.text = $"{(currentItem.itemData.weight * currentItem.quantity):0.##} KG";
 
-        // Durability
         if (currentItem.currentDurability < 0)
         {
             durabilitySlider.gameObject.SetActive(false);
@@ -44,7 +42,6 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
             durabilitySlider.value = Mathf.Clamp01(currentItem.currentDurability / 100f);
         }
 
-        // Spoil
         if (currentItem.remainingSpoilTime < 0 || currentItem.itemData.spoilDuration <= 0)
         {
             spoilSlider.gameObject.SetActive(false);
@@ -79,7 +76,6 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         gameObject.SetActive(value);
     }
 
-    // 👉 Hover logic using singleton
     public void OnPointerEnter(PointerEventData eventData)
     {
         if (currentItem == null || InventoryManager.Instance == null)

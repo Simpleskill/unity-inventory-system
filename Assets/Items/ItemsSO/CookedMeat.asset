@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InventoryItemData
   itemId: 1
   itemName: Cooked Meat
-  itemDescription: Restores hunger and a small amount of health. Safe to eat.
+  description: Description for cooked meat
   itemPrefab: {fileID: 0}
   icon: {fileID: 21300000, guid: 9cd009c7146fe2044a704d8dfc2fcce5, type: 3}
   itemType: 0

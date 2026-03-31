@@ -5,7 +5,7 @@ using UnityEngine.UI;
 public class InventoryItemData : ScriptableObject
 {
     [Header("Basic Info")]
-    public string itemId;
+    public int itemId;
     [SerializeField] public string itemName;
     [SerializeField] public string description;
     [SerializeField] public GameObject itemPrefab;

@@ -1,26 +1,34 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class InventoryManager : MonoBehaviour
 {
     [Header("Inventory Data")]
     [SerializeField] public List<InventoryItemInstance> items = new List<InventoryItemInstance>();
 
+    [Header("Sorting")]
+    [SerializeField] public  InventorySortType currentSort = InventorySortType.NameAsc;
+
     [Header("UI")]
     [SerializeField] public Transform slotsParent;
     [SerializeField] public GameObject slotPrefab;
+    
+    [Header("Filters")]
+    [SerializeField] public Transform sortByBtn;
+    [SerializeField] public TMP_Dropdown sortByDropdown;
 
     public List<InventorySlotUI> spawnedSlots = new List<InventorySlotUI>();
-    
+
     [Header("Item Description")]
     [SerializeField] public GameObject itemDescriptionPrefab;
     [SerializeField] public Transform descriptionParent;
 
-    
     public ItemDescriptionUI currentDescriptionUI;
     public InventorySlotUI currentHoveredSlot;
+
     public static InventoryManager Instance { get; private set; }
 
     private void Awake()
@@ -33,11 +41,14 @@ public class InventoryManager : MonoBehaviour
 
         Instance = this;
     }
+
     private void Start()
     {
         CacheExistingSlots();
+        CreateDescriptionInstance();
         RefreshInventoryUI();
     }
+
     private void CacheExistingSlots()
     {
         spawnedSlots.Clear();
@@ -51,62 +62,45 @@ public class InventoryManager : MonoBehaviour
             }
         }
     }
-    public void AddItem(InventoryItemData itemData, int quantity = 1)
+
+    private void CreateDescriptionInstance()
     {
-        if (itemData == null)
+        if (itemDescriptionPrefab == null || descriptionParent == null)
             return;
 
-        InventoryItemInstance existingItem = items.FirstOrDefault(i => i.itemData == itemData);
-
-        if (existingItem != null)
-        {
-            existingItem.quantity += quantity;
-        }
-        else
-        {
-            items.Add(new InventoryItemInstance(itemData, quantity));
-        }
-
-        RefreshInventoryUI();
-    }
-
-    public void RemoveItem(InventoryItemData itemData, int quantity = 1)
-    {
-        if (itemData == null)
+        if (currentDescriptionUI != null)
             return;
 
-        InventoryItemInstance existingItem = items.FirstOrDefault(i => i.itemData == itemData);
+        GameObject descriptionObject = Instantiate(itemDescriptionPrefab, descriptionParent);
+        currentDescriptionUI = descriptionObject.GetComponent<ItemDescriptionUI>();
 
-        if (existingItem == null)
-            return;
-
-        existingItem.quantity -= quantity;
-
-        if (existingItem.quantity <= 0)
+        if (currentDescriptionUI != null)
         {
-            items.Remove(existingItem);
+            currentDescriptionUI.gameObject.SetActive(false);
         }
-
-        RefreshInventoryUI();
     }
 
     public void RefreshInventoryUI()
     {
+        SortItems(currentSort);
+        DrawItems(items);
+    }
+
+    private void DrawItems(List<InventoryItemInstance> itemList)
+    {
         ClearSpawnedSlots();
 
-        for (int i = 0; i < items.Count; i++)
+        for (int i = 0; i < itemList.Count; i++)
         {
             GameObject slotGO = Instantiate(slotPrefab, slotsParent);
             InventorySlotUI slot = slotGO.GetComponent<InventorySlotUI>();
-            slot.Setup(items[i]);
+            slot.Setup(itemList[i]);
             spawnedSlots.Add(slot);
         }
     }
 
     public void ClearSpawnedSlots()
     {
-        Debug.Log("Clearing spawned slots");
-        Debug.Log("It had "+spawnedSlots.Count+" items");
         for (int i = 0; i < spawnedSlots.Count; i++)
         {
             if (spawnedSlots[i] != null)
@@ -116,46 +110,126 @@ public class InventoryManager : MonoBehaviour
         }
 
         spawnedSlots.Clear();
+        HideItemDescription();
     }
 
+    public void SetSort(InventorySortType sortType)
+    {
+        currentSort = sortType;
+        RefreshInventoryUI();
+    }
+
+    public void SortItems(InventorySortType sortType)
+    {
+        currentSort = sortType;
+
+        switch (sortType)
+        {
+            case InventorySortType.NameAsc:
+                items = items
+                    .OrderBy(i => i.itemData != null ? i.itemData.itemName : string.Empty)
+                    .ToList();
+                break;
+
+            case InventorySortType.NameDesc:
+                items = items
+                    .OrderByDescending(i => i.itemData != null ? i.itemData.itemName : string.Empty)
+                    .ToList();
+                break;
+
+            case InventorySortType.WeightAsc:
+                items = items
+                    .OrderBy(i => i.itemData != null ? i.itemData.weight * i.quantity : float.MaxValue)
+                    .ThenBy(i => i.itemData != null ? i.itemData.itemName : string.Empty)
+                    .ToList();
+                break;
+
+            case InventorySortType.WeightDesc:
+                items = items
+                    .OrderByDescending(i => i.itemData != null ? i.itemData.weight * i.quantity : float.MinValue)
+                    .ThenBy(i => i.itemData != null ? i.itemData.itemName : string.Empty)
+                    .ToList();
+                break;
+
+            case InventorySortType.SpoilTimeAsc:
+                items = items
+                    .OrderBy(i => i.itemData != null ? i.remainingSpoilTime : float.MaxValue)
+                    .ThenBy(i => i.itemData != null ? i.itemData.itemName : string.Empty)
+                    .ToList();
+                break;
+
+            case InventorySortType.SpoilTimeDesc:
+                items = items
+                    .OrderByDescending(i => i.itemData != null ? i.remainingSpoilTime : float.MinValue)
+                    .ThenBy(i => i.itemData != null ? i.itemData.itemName : string.Empty)
+                    .ToList();
+                break;
+        }
+    }
     public List<InventoryItemInstance> FilterByName(string searchText)
     {
         if (string.IsNullOrWhiteSpace(searchText))
             return new List<InventoryItemInstance>(items);
 
-        searchText = searchText.ToLower();
+        searchText = searchText.Trim().ToLower();
 
         return items
-            .Where(i => i.itemData != null && i.itemData.itemName.ToLower().Contains(searchText))
+            .Where(i =>
+                i.itemData != null &&
+                !string.IsNullOrEmpty(i.itemData.itemName) &&
+                i.itemData.itemName.ToLower().Contains(searchText))
             .ToList();
     }
-
-    public List<InventoryItemInstance> FilterByWeight(float minWeight, float maxWeight)
+    
+    public void ApplySearchFilter(string searchText)
     {
-        return items
-            .Where(i => i.itemData != null &&
-                        i.itemData.weight >= minWeight &&
-                        i.itemData.weight <= maxWeight)
-            .ToList();
-    }
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            RefreshInventoryUI();
+            return;
+        }
 
-    public List<InventoryItemInstance> FilterSpoilableOnly()
-    {
-        return items
-            .Where(i => i.itemData != null && i.itemData.spoilDuration > 0f)
+        List<InventoryItemInstance> filteredItems = items
+            .Where(i =>
+                i.itemData != null &&
+                !string.IsNullOrEmpty(i.itemData.itemName) &&
+                i.itemData.itemName.ToLower().Contains(searchText.Trim().ToLower()))
             .ToList();
-    }
 
+        ApplyFilter(filteredItems);
+    }
+    
     public void ApplyFilter(List<InventoryItemInstance> filteredItems)
     {
-        ClearSpawnedSlots();
+        // opcional: manter também os filtros ordenados pelo sort atual
+        List<InventoryItemInstance> sortedFilteredItems = SortItemList(filteredItems, currentSort);
+        DrawItems(sortedFilteredItems);
+    }
 
-        for (int i = 0; i < filteredItems.Count; i++)
+    private List<InventoryItemInstance> SortItemList(List<InventoryItemInstance> itemList, InventorySortType sortType)
+    {
+        switch (sortType)
         {
-            GameObject slotGO = Instantiate(slotPrefab, slotsParent);
-            InventorySlotUI slot = slotGO.GetComponent<InventorySlotUI>();
-            slot.Setup(filteredItems[i]);
-            spawnedSlots.Add(slot);
+            case InventorySortType.NameAsc:
+                return itemList.OrderBy(i => i.itemData != null ? i.itemData.itemName : string.Empty).ToList();
+
+            case InventorySortType.NameDesc:
+                return itemList.OrderByDescending(i => i.itemData != null ? i.itemData.itemName : string.Empty).ToList();
+
+            case InventorySortType.WeightAsc:
+                return itemList.OrderBy(i => i.itemData != null ? i.itemData.weight : float.MaxValue).ToList();
+
+            case InventorySortType.WeightDesc:
+                return itemList.OrderByDescending(i => i.itemData != null ? i.itemData.weight : float.MinValue).ToList();
+
+            case InventorySortType.SpoilTimeAsc:
+                return itemList.OrderBy(i => i.itemData != null ? i.itemData.spoilDuration : float.MaxValue).ToList();
+
+            case InventorySortType.SpoilTimeDesc:
+                return itemList.OrderByDescending(i => i.itemData != null ? i.itemData.spoilDuration : float.MinValue).ToList();
+
+            default:
+                return itemList;
         }
     }
 
@@ -163,27 +237,30 @@ public class InventoryManager : MonoBehaviour
     {
         RefreshInventoryUI();
     }
-    
 
     public void ShowItemDescription(InventoryItemInstance item, InventorySlotUI slot)
     {
-        if (item == null || item.itemData == null || itemDescriptionPrefab == null)
+        if (item == null || item.itemData == null)
             return;
 
-        if (currentHoveredSlot == slot && currentDescriptionUI != null)
-            return;
-
-        HideItemDescription();
-
-        GameObject descriptionObject = Instantiate(itemDescriptionPrefab, descriptionParent);
-        currentDescriptionUI = descriptionObject.GetComponent<ItemDescriptionUI>();
-
-        if (currentDescriptionUI != null)
+        if (currentDescriptionUI == null)
         {
+            CreateDescriptionInstance();
+        }
+
+        if (currentDescriptionUI == null)
+            return;
+
+        if (currentHoveredSlot != slot)
+        {
+            currentHoveredSlot = slot;
             currentDescriptionUI.Setup(item);
         }
 
-        currentHoveredSlot = slot;
+        if (!currentDescriptionUI.gameObject.activeSelf)
+        {
+            currentDescriptionUI.gameObject.SetActive(true);
+        }
     }
 
     public void HideItemDescription(InventorySlotUI slot = null)
@@ -193,10 +270,19 @@ public class InventoryManager : MonoBehaviour
 
         if (currentDescriptionUI != null)
         {
-            Destroy(currentDescriptionUI.gameObject);
-            currentDescriptionUI = null;
+            currentDescriptionUI.gameObject.SetActive(false);
         }
 
         currentHoveredSlot = null;
     }
+    public void ToggleSortByBtn()
+    {
+        sortByDropdown.gameObject.SetActive(!sortByDropdown.isActiveAndEnabled);
+
+        if (sortByDropdown.isActiveAndEnabled)
+        {
+            
+        }
+    }
+    
 }

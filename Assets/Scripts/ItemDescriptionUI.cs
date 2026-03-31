@@ -53,7 +53,7 @@ public class ItemDescriptionUI : MonoBehaviour
             return;
 
 
-        nameText.text = item.itemData.itemName + "/"+ item.itemData.itemType;
+        nameText.text = item.itemData.itemName + " / "+ item.itemData.itemType;
         
 
         iconImage.sprite = item.itemData.icon;
@@ -123,6 +123,7 @@ public class ItemDescriptionUI : MonoBehaviour
         );
 
         SetPosition(mouseScreenPos + adjustedOffset);
+        
     }
 
     private void SetPosition(Vector2 screenPosition)

@@ -9,7 +9,7 @@ public class ItemDatabase : ScriptableObject
 
     public InventoryItemData GetItemById(string id)
     {
-        return allItems.FirstOrDefault(item => item != null && item.itemId == id);
+        return allItems.FirstOrDefault(item => item != null && item.itemId == int.Parse(id));
     }
 
     public InventoryItemData GetItemByName(string name)
