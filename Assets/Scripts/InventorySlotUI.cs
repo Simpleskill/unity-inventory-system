@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
+public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler, IPointerDownHandler
 {
     [Header("UI References")]
     [SerializeField] private Image itemIcon;
@@ -90,6 +90,7 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     }
     public void ToggleActionsUI()
     {
+        Debug.Log("ToggleActionsUI");
         InventoryManager.Instance.ToggleOnOffUIAction();
     }
 
@@ -145,6 +146,27 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         InventoryManager.Instance.HideItemDescription(this);
     }
     public void OnPointerClick(PointerEventData eventData)
+    {
+        // if (InventoryManager.Instance == null)
+        //     return;
+        //
+        // if (eventData.button == PointerEventData.InputButton.Left)
+        // {
+        //     if (InventoryManager.Instance.currentSelectedSlot == this)
+        //         DeselectThisSlot();
+        //     else
+        //         SelectThisSlot();
+        // }
+        // else if (eventData.button == PointerEventData.InputButton.Right)
+        // {
+        //     if (InventoryManager.Instance.currentSelectedSlot != this)
+        //         SelectThisSlot();
+        //
+        //     ToggleActionsUI();
+        // }
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
     {
         if (InventoryManager.Instance == null)
             return;

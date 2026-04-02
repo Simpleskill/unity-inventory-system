@@ -1,8 +1,11 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 
 public class InventoryManager : MonoBehaviour
 {
@@ -35,7 +38,9 @@ public class InventoryManager : MonoBehaviour
     [SerializeField] public Transform actionParent;
 
     public RectTransform currentActionUI;
+    private bool ignoreClickThisFrame = false;
 
+    [SerializeField] private ScrollRect inventoryScrollRect;
     public static InventoryManager Instance { get; private set; }
 
     private void Awake()
@@ -54,8 +59,60 @@ public class InventoryManager : MonoBehaviour
         CacheExistingSlots();
         CreateDescriptionInstance();
         RefreshInventoryUI();
+
+        if (inventoryScrollRect != null)
+        {
+            inventoryScrollRect.onValueChanged.AddListener(OnInventoryScrolled);
+        }
     }
 
+    private void Update()
+    {
+        if (currentActionUI == null || !currentActionUI.gameObject.activeSelf)
+            return;
+
+        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            HideInventoryUIAction();
+            return;
+        }
+
+        if (ignoreClickThisFrame)
+        {
+            ignoreClickThisFrame = false;
+            return;
+        }
+
+        if (Mouse.current == null)
+            return;
+
+        if (Mouse.current.leftButton.wasPressedThisFrame || Mouse.current.rightButton.wasPressedThisFrame)
+        {
+            if (!IsPointerOverCurrentActionUI())
+            {
+                HideInventoryUIAction();
+            }
+        }
+    }
+    
+    private bool IsPointerOverCurrentActionUI()
+    {
+        if (currentActionUI == null)
+            return false;
+
+        Vector2 screenPoint = Mouse.current.position.ReadValue();
+
+        Canvas canvas = currentActionUI.GetComponentInParent<Canvas>();
+        Camera uiCamera = null;
+
+        if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+        {
+            uiCamera = canvas.worldCamera;
+        }
+
+        return RectTransformUtility.RectangleContainsScreenPoint(currentActionUI, screenPoint, uiCamera);
+    }
+    
     private void CacheExistingSlots()
     {
         spawnedSlots.Clear();
@@ -85,6 +142,17 @@ public class InventoryManager : MonoBehaviour
             currentActionUI.gameObject.SetActive(false);
         }
     }
+    
+    private void OnInventoryScrolled(Vector2 scrollPosition)
+    {
+        if (currentActionUI != null && currentActionUI.gameObject.activeSelf)
+        {
+            
+            Debug.Log("Hidden after a scroll");
+            HideInventoryUIAction();
+        }
+    }
+    
     public void ToggleInventoryUIAction(bool show)
     {
         if (!show)
@@ -107,11 +175,11 @@ public class InventoryManager : MonoBehaviour
         if (currentActionUI == null)
             return;
 
-        PositionActionBelowSlot(currentSelectedSlot);
-
+        EnsureSlotIsVisible(currentSelectedSlot);
+        
         if (!currentActionUI.gameObject.activeSelf)
         {
-            currentActionUI.gameObject.SetActive(true);
+            StartCoroutine(ShowActionUIAfterAutoScroll());
         }
     }
 
@@ -135,6 +203,7 @@ public class InventoryManager : MonoBehaviour
     
     public void HideInventoryUIAction()
     {
+        Debug.Log("Hide Inventory UI Action");
         if (currentActionUI != null)
         {
             currentActionUI.gameObject.SetActive(false);
@@ -147,21 +216,82 @@ public class InventoryManager : MonoBehaviour
             return;
 
         RectTransform slotRect = slot.GetComponent<RectTransform>();
-        RectTransform actionRect = currentActionUI;
-
         if (slotRect == null)
             return;
 
-        Vector3 slotPosition = slotRect.position;
+        Vector3[] corners = new Vector3[4];
+        slotRect.GetWorldCorners(corners);
 
-        float offsetX = 3f;
-        float offsetY = -slotRect.rect.height + 0;
+        // 0 = bottom-left
+        // 1 = top-left
+        // 2 = top-right
+        // 3 = bottom-right
 
-        actionRect.position = new Vector3(
-            slotPosition.x + offsetX,
-            slotPosition.y + offsetY,
-            0
+        Vector3 bottomCenter = (corners[0] + corners[3]) * 0.5f ;
+
+        currentActionUI.position = new Vector3(
+            bottomCenter.x,
+            bottomCenter.y ,
+            currentActionUI.position.z
         );
+    }
+    
+    public void EnsureSlotIsVisible(InventorySlotUI slot)
+    {
+        if (slot == null || inventoryScrollRect == null)
+            return;
+
+        RectTransform viewport = inventoryScrollRect.viewport;
+        RectTransform content = inventoryScrollRect.content;
+        RectTransform slotRect = slot.GetComponent<RectTransform>();
+
+        if (viewport == null || content == null || slotRect == null)
+            return;
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+
+        Vector3 slotWorldPos = slotRect.position;
+        Vector3 slotLocalInViewport = viewport.InverseTransformPoint(slotWorldPos);
+
+        float slotTop = slotLocalInViewport.y;
+        float slotBottom = slotTop - slotRect.rect.height;
+
+        float viewportTop = viewport.rect.yMax;
+        float viewportBottom = viewport.rect.yMin;
+
+        float contentHeight = content.rect.height;
+        float viewportHeight = viewport.rect.height;
+
+        if (contentHeight <= viewportHeight)
+            return;
+
+        float hiddenHeight = contentHeight - viewportHeight;
+
+        float topVisibilityTolerance = 6f;
+        float bottomVisibilityTolerance = 2f;
+
+        if (slotTop > viewportTop - topVisibilityTolerance)
+        {
+            float extraTopPadding = slotRect.rect.height * 0.5f;
+            float overshootTop = (slotTop - viewportTop) + extraTopPadding + topVisibilityTolerance;
+            float normalizedDelta = overshootTop / hiddenHeight;
+
+            inventoryScrollRect.verticalNormalizedPosition = Mathf.Clamp01(
+                inventoryScrollRect.verticalNormalizedPosition + normalizedDelta
+            );
+        }
+        else if (slotBottom < viewportBottom + bottomVisibilityTolerance)
+        {
+            float extraBottomPadding = slotRect.rect.height * -0.5f;
+            float overshootBottom = (viewportBottom - slotBottom) + extraBottomPadding + bottomVisibilityTolerance;
+            float normalizedDelta = overshootBottom / hiddenHeight;
+
+            inventoryScrollRect.verticalNormalizedPosition = Mathf.Clamp01(
+                inventoryScrollRect.verticalNormalizedPosition - normalizedDelta
+            );
+        }
+        Debug.Log("Ensured is visible");
     }
     
     public void SwapSelected(InventorySlotUI slot)
@@ -212,6 +342,8 @@ public class InventoryManager : MonoBehaviour
         currentSelectedSlot = slot;
         currentSelectedSlot.isSelected = true;
         currentSelectedSlot.HighlightSelectedItem(true);
+
+        EnsureSlotIsVisible(currentSelectedSlot);
     }
 
     public void DeselectCurrentSlot()
@@ -248,6 +380,8 @@ public class InventoryManager : MonoBehaviour
         currentSelectedSlot = spawnedSlots[nextIndex];
         currentSelectedSlot.isSelected = true;
         currentSelectedSlot.HighlightSelectedItem(true);
+
+        EnsureSlotIsVisible(currentSelectedSlot);
     }
 
     public void SelectPreviousSlot()
@@ -275,6 +409,8 @@ public class InventoryManager : MonoBehaviour
         currentSelectedSlot = spawnedSlots[previousIndex];
         currentSelectedSlot.isSelected = true;
         currentSelectedSlot.HighlightSelectedItem(true);
+
+        EnsureSlotIsVisible(currentSelectedSlot);
     }
     
     private InventorySlotUI GetSlotUIByItem(InventoryItemInstance item)
@@ -346,14 +482,12 @@ public class InventoryManager : MonoBehaviour
             if (slot != null && slot.CurrentItem == selectedItem)
             {
                 currentSelectedSlot = slot;
+                currentSelectedSlot.isSelected = true;
                 currentSelectedSlot.HighlightSelectedItem(true);
+                EnsureSlotIsVisible(currentSelectedSlot);
                 return;
             }
         }
-
-        // // Se o item selecionado deixou de existir no filtro, seleciona o primeiro visível
-        // currentSelectedSlot = spawnedSlots[0];
-        // currentSelectedSlot.HighlightSelectedItem(true);
     }
     public void ClearSpawnedSlots()
     {
@@ -491,6 +625,39 @@ public class InventoryManager : MonoBehaviour
         }
     }
 
+    private IEnumerator ShowActionUIAfterAutoScroll()
+    {
+        yield return new WaitForSeconds(0f);
+        ignoreClickThisFrame = true;
+        PositionActionBelowSlot(currentSelectedSlot);
+
+        if (currentActionUI != null)
+            currentActionUI.gameObject.SetActive(true);
+    }
+    
+    private bool IsSlotFullyVisible(InventorySlotUI slot)
+    {
+        if (slot == null || inventoryScrollRect == null)
+            return false;
+
+        RectTransform viewport = inventoryScrollRect.viewport;
+        RectTransform slotRect = slot.GetComponent<RectTransform>();
+
+        Vector3[] viewportCorners = new Vector3[4];
+        Vector3[] slotCorners = new Vector3[4];
+
+        viewport.GetWorldCorners(viewportCorners);
+        slotRect.GetWorldCorners(slotCorners);
+
+        float viewportTop = viewportCorners[1].y;
+        float viewportBottom = viewportCorners[0].y;
+
+        float slotTop = slotCorners[1].y;
+        float slotBottom = slotCorners[0].y;
+
+        return slotTop <= viewportTop && slotBottom >= viewportBottom;
+    }
+    
     public void ShowAllItems()
     {
         RefreshInventoryUI();
@@ -542,5 +709,11 @@ public class InventoryManager : MonoBehaviour
             
         }
     }
-    
+    private void OnDestroy()
+    {
+        if (inventoryScrollRect != null)
+        {
+            inventoryScrollRect.onValueChanged.RemoveListener(OnInventoryScrolled);
+        }
+    }
 }
