@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
 {
     [Header("UI References")]
     [SerializeField] private Image itemIcon;
@@ -13,6 +13,8 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     [SerializeField] private Slider spoilSlider;
 
     private InventoryItemInstance currentItem;
+    
+    public bool isSelected = false;
 
     public InventoryItemInstance CurrentItem => currentItem;
 
@@ -53,6 +55,43 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
             spoilSlider.value = Mathf.Clamp01(percent);
         }
     }
+    
+    public void HighlightSelectedItem(bool isSelected)
+    {
+        if (itemIcon == null)
+            return;
+
+        Color baseColor = Color.white;
+        Image backgroundImage = GetComponent<Image>();
+        
+        if (isSelected)
+        {
+            float darkenFactor = 0.7f; // quanto menor, mais escuro
+            Color darkerColor = new Color(
+                baseColor.r * darkenFactor,
+                baseColor.g * darkenFactor,
+                baseColor.b * darkenFactor,
+                baseColor.a
+            );
+
+            backgroundImage.color = darkerColor;
+        }
+        else
+        {
+            // volta à cor original (branco mantém a sprite normal)
+            backgroundImage.color = Color.white;
+        }
+    }
+    public void ToggleSelection()
+    {
+        isSelected = !isSelected;
+        HighlightSelectedItem(isSelected);
+        InventoryManager.Instance.SwapSelected(this);
+    }
+    public void ToggleActionsUI()
+    {
+        InventoryManager.Instance.ToggleOnOffUIAction();
+    }
 
     public void Clear()
     {
@@ -83,12 +122,46 @@ public class InventorySlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
         InventoryManager.Instance.ShowItemDescription(currentItem, this);
     }
+    public void SelectThisSlot()
+    {
+        if (InventoryManager.Instance == null)
+            return;
 
+        InventoryManager.Instance.SelectSlot(this);
+    }
+
+    public void DeselectThisSlot()
+    {
+        if (InventoryManager.Instance == null)
+            return;
+
+        InventoryManager.Instance.DeselectCurrentSlot();
+    }
     public void OnPointerExit(PointerEventData eventData)
     {
         if (InventoryManager.Instance == null)
             return;
 
         InventoryManager.Instance.HideItemDescription(this);
+    }
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (InventoryManager.Instance == null)
+            return;
+
+        if (eventData.button == PointerEventData.InputButton.Left)
+        {
+            if (InventoryManager.Instance.currentSelectedSlot == this)
+                DeselectThisSlot();
+            else
+                SelectThisSlot();
+        }
+        else if (eventData.button == PointerEventData.InputButton.Right)
+        {
+            if (InventoryManager.Instance.currentSelectedSlot != this)
+                SelectThisSlot();
+
+            ToggleActionsUI();
+        }
     }
 }

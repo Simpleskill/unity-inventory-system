@@ -1,12 +1,30 @@
 using System.Linq;
 using UnityEngine;
-
+using UnityEngine.InputSystem;
 public class InventoryHandler : MonoBehaviour
 {
     public InventoryManager inventoryManager;
 
-    public InventoryItemInstance cookedMeatTest;
+    private void Update()
+    {
+        if (!inventoryManager || Keyboard.current == null)
+            return;
 
+        if (Keyboard.current.rightArrowKey.wasPressedThisFrame)
+        {
+            //Debug.Log("Right Arrow");
+            inventoryManager.SelectNextSlot();
+        }
+
+
+        if (Keyboard.current.leftArrowKey.wasPressedThisFrame)
+        {
+            //Debug.Log("Left Arrow");
+            inventoryManager.SelectPreviousSlot();
+        }
+            
+    }
+    
     public void AddItem(InventoryItemInstance item)
     {
         // Validate input and references
@@ -60,8 +78,4 @@ public class InventoryHandler : MonoBehaviour
         inventoryManager.RefreshInventoryUI();
     }
 
-    public void AddCookedMeat()
-    {
-        AddItem(cookedMeatTest);
-    }
 }

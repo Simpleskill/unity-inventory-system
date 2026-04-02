@@ -28,6 +28,13 @@ public class InventoryManager : MonoBehaviour
 
     public ItemDescriptionUI currentDescriptionUI;
     public InventorySlotUI currentHoveredSlot;
+    public InventorySlotUI currentSelectedSlot;
+    
+    [Header("Item Action UI")]
+    [SerializeField] public GameObject itemActionPrefab;
+    [SerializeField] public Transform actionParent;
+
+    public RectTransform currentActionUI;
 
     public static InventoryManager Instance { get; private set; }
 
@@ -61,6 +68,224 @@ public class InventoryManager : MonoBehaviour
                 spawnedSlots.Add(slot);
             }
         }
+    }
+    private void CreateActionInstance()
+    {
+        if (itemActionPrefab == null || actionParent == null)
+            return;
+
+        if (currentActionUI != null)
+            return;
+
+        GameObject actionObject = Instantiate(itemActionPrefab, actionParent);
+        currentActionUI = actionObject.GetComponent<RectTransform>();
+
+        if (currentActionUI != null)
+        {
+            currentActionUI.gameObject.SetActive(false);
+        }
+    }
+    public void ToggleInventoryUIAction(bool show)
+    {
+        if (!show)
+        {
+            HideInventoryUIAction();
+            return;
+        }
+
+        if (currentSelectedSlot == null)
+        {
+            HideInventoryUIAction();
+            return;
+        }
+
+        if (currentActionUI == null)
+        {
+            CreateActionInstance();
+        }
+
+        if (currentActionUI == null)
+            return;
+
+        PositionActionBelowSlot(currentSelectedSlot);
+
+        if (!currentActionUI.gameObject.activeSelf)
+        {
+            currentActionUI.gameObject.SetActive(true);
+        }
+    }
+
+    public void ToggleOnOffUIAction()
+    {
+        if (!currentActionUI)
+        {
+            ToggleInventoryUIAction(true);
+            return;
+        }
+
+        if (!currentActionUI.gameObject.activeSelf)
+        {
+            
+            ToggleInventoryUIAction(true);
+            return;
+        }
+        
+        ToggleInventoryUIAction(false);
+    }
+    
+    public void HideInventoryUIAction()
+    {
+        if (currentActionUI != null)
+        {
+            currentActionUI.gameObject.SetActive(false);
+        }
+    }
+    
+    private void PositionActionBelowSlot(InventorySlotUI slot)
+    {
+        if (slot == null || currentActionUI == null)
+            return;
+
+        RectTransform slotRect = slot.GetComponent<RectTransform>();
+        RectTransform actionRect = currentActionUI;
+
+        if (slotRect == null)
+            return;
+
+        Vector3 slotPosition = slotRect.position;
+
+        float offsetX = 3f;
+        float offsetY = -slotRect.rect.height + 0;
+
+        actionRect.position = new Vector3(
+            slotPosition.x + offsetX,
+            slotPosition.y + offsetY,
+            0
+        );
+    }
+    
+    public void SwapSelected(InventorySlotUI slot)
+    {
+        if (slot == null)
+            return;
+
+        // Se clicou no slot já selecionado, desseleciona
+        if (currentSelectedSlot == slot)
+        {
+            currentSelectedSlot.isSelected = false;
+            currentSelectedSlot.HighlightSelectedItem(false);
+            currentSelectedSlot = null;
+            HideInventoryUIAction();
+            return;
+        }
+
+        // Remove seleção anterior
+        if (currentSelectedSlot != null)
+        {
+            currentSelectedSlot.isSelected = false;
+            currentSelectedSlot.HighlightSelectedItem(false);
+        }
+
+        HideInventoryUIAction();
+
+        // Seleciona o novo slot
+        currentSelectedSlot = slot;
+        currentSelectedSlot.isSelected = true;
+        currentSelectedSlot.HighlightSelectedItem(true);
+    }
+    public void SelectSlot(InventorySlotUI slot)
+    {
+        if (slot == null)
+            return;
+
+        if (currentSelectedSlot == slot)
+            return;
+
+        if (currentSelectedSlot != null)
+        {
+            currentSelectedSlot.isSelected = false;
+            currentSelectedSlot.HighlightSelectedItem(false);
+        }
+
+        HideInventoryUIAction();
+
+        currentSelectedSlot = slot;
+        currentSelectedSlot.isSelected = true;
+        currentSelectedSlot.HighlightSelectedItem(true);
+    }
+
+    public void DeselectCurrentSlot()
+    {
+        if (currentSelectedSlot == null)
+            return;
+
+        currentSelectedSlot.isSelected = false;
+        currentSelectedSlot.HighlightSelectedItem(false);
+        currentSelectedSlot = null;
+
+        HideInventoryUIAction();
+    }
+    
+    public void SelectNextSlot()
+    {
+        if (currentSelectedSlot == null)
+            return;
+
+        if (spawnedSlots == null || spawnedSlots.Count <= 1)
+            return;
+
+        int currentIndex = spawnedSlots.IndexOf(currentSelectedSlot);
+
+        if (currentIndex < 0)
+            return;
+
+        int nextIndex = (currentIndex + 1) % spawnedSlots.Count;
+
+        currentSelectedSlot.isSelected = false;
+        currentSelectedSlot.HighlightSelectedItem(false);
+        HideInventoryUIAction();
+
+        currentSelectedSlot = spawnedSlots[nextIndex];
+        currentSelectedSlot.isSelected = true;
+        currentSelectedSlot.HighlightSelectedItem(true);
+    }
+
+    public void SelectPreviousSlot()
+    {
+        if (currentSelectedSlot == null)
+            return;
+
+        if (spawnedSlots == null || spawnedSlots.Count <= 1)
+            return;
+
+        int currentIndex = spawnedSlots.IndexOf(currentSelectedSlot);
+
+        if (currentIndex < 0)
+            return;
+
+        int previousIndex = currentIndex - 1;
+
+        if (previousIndex < 0)
+            previousIndex = spawnedSlots.Count - 1;
+
+        currentSelectedSlot.isSelected = false;
+        currentSelectedSlot.HighlightSelectedItem(false);
+        HideInventoryUIAction();
+
+        currentSelectedSlot = spawnedSlots[previousIndex];
+        currentSelectedSlot.isSelected = true;
+        currentSelectedSlot.HighlightSelectedItem(true);
+    }
+    
+    private InventorySlotUI GetSlotUIByItem(InventoryItemInstance item)
+    {
+        foreach (InventorySlotUI slot in spawnedSlots)
+        {
+            if (slot != null && slot.CurrentItem == item)
+                return slot;
+        }
+
+        return null;
     }
 
     private void CreateDescriptionInstance()
@@ -97,8 +322,39 @@ public class InventoryManager : MonoBehaviour
             slot.Setup(itemList[i]);
             spawnedSlots.Add(slot);
         }
+
+        RestoreSelectionAfterRedraw();
     }
 
+    private void RestoreSelectionAfterRedraw()
+    {
+        if (spawnedSlots == null || spawnedSlots.Count == 0)
+        {
+            currentSelectedSlot = null;
+            return;
+        }
+
+        if (currentSelectedSlot == null)
+        {
+            return;
+        }
+
+        InventoryItemInstance selectedItem = currentSelectedSlot.CurrentItem;
+
+        foreach (InventorySlotUI slot in spawnedSlots)
+        {
+            if (slot != null && slot.CurrentItem == selectedItem)
+            {
+                currentSelectedSlot = slot;
+                currentSelectedSlot.HighlightSelectedItem(true);
+                return;
+            }
+        }
+
+        // // Se o item selecionado deixou de existir no filtro, seleciona o primeiro visível
+        // currentSelectedSlot = spawnedSlots[0];
+        // currentSelectedSlot.HighlightSelectedItem(true);
+    }
     public void ClearSpawnedSlots()
     {
         for (int i = 0; i < spawnedSlots.Count; i++)
@@ -110,7 +366,9 @@ public class InventoryManager : MonoBehaviour
         }
 
         spawnedSlots.Clear();
+        currentSelectedSlot = null;
         HideItemDescription();
+        HideInventoryUIAction();
     }
 
     public void SetSort(InventorySortType sortType)
